@@ -1,52 +1,58 @@
 import { parentPort, workerData } from 'worker_threads';
-import { createCanvas, loadImage, ImageData } from '@napi-rs/canvas';
-import { ImageProcessor, SharpenMode } from './ImageProcessor';
+import { createCanvas, loadImage, ImageData as CanvasImageData } from '@napi-rs/canvas';
+import { ImageProcessor } from './ImageProcessor';
 import * as fs from 'fs';
 
-(global as any).ImageData = ImageData;
+(global as any).ImageData = CanvasImageData;
 
 interface WorkerData {
   framePath: string;
   blurRadius: number;
   sharpenStrength: number;
-  sharpenMode: SharpenMode;
+  sharpenMode: 'rgb' | 'lab';
   numIterations: number;
   width: number;
   height: number;
 }
 
-/**
- * This is where we blur and sharpen the image
- *
- * @param data
- */
-async function processFrame(data: WorkerData): Promise<void> {
-  const { framePath, blurRadius, sharpenStrength, sharpenMode, numIterations, width, height } = data;
+async function processFrame(): Promise<void> {
+  try {
+    const data: WorkerData = workerData;
 
-  const image = await loadImage(framePath);
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
+    // Load image
+    const image = await loadImage(data.framePath);
+    const canvas = createCanvas(image.width, image.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0);
 
-  ctx.drawImage(image, 0, 0);
+    let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  let imageData = ctx.getImageData(0, 0, width, height);
+    // Apply blur and sharpen iterations
+    // The key optimization here is that we reuse the imageData object
+    for (let i = 0; i < data.numIterations; i++) {
+      // Blur
+      imageData = ImageProcessor.gaussianBlur(imageData, data.blurRadius);
 
-  for (let i = 0; i < numIterations; i++) {
-    imageData = ImageProcessor.gaussianBlur(imageData, blurRadius);
-    imageData = ImageProcessor.sharpenImage(imageData, sharpenStrength, sharpenMode);
-  }
+      // Sharpen
+      imageData = ImageProcessor.sharpenImage(
+        imageData,
+        data.sharpenStrength,
+        data.sharpenMode
+      );
+    }
 
-  ctx.putImageData(imageData, 0, 0);
-  const buffer = await canvas.encode('png');
-  fs.writeFileSync(framePath, buffer);
-}
+    // Write result back
+    ctx.putImageData(imageData, 0, 0);
+    const buffer = canvas.toBuffer('image/png');
+    fs.writeFileSync(data.framePath, buffer);
 
-if (parentPort) {
-  processFrame(workerData)
-    .then(() => {
-      parentPort!.postMessage({ success: true });
-    })
-    .catch((error) => {
-      parentPort!.postMessage({ success: false, error: error.message });
+    parentPort?.postMessage({ success: true });
+  } catch (error) {
+    parentPort?.postMessage({
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     });
+  }
 }
+
+processFrame();

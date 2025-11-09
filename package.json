@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.60",
-    "fluent-ffmpeg": "^2.1.2"
+    "execa": "^9.6.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "minimist": "^1.2.8"
   },
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.24",
