@@ -121,7 +121,7 @@ async function processFrames(
           sharpenMode,
           numIterations,
           // To create the effect where a video gradually transitions into a Turing Pattern, use the below line
-          //numIterations: Math.max(0, Math.min(20, frameNum - 30 * 9)),
+          //numIterations: Math.max(0, Math.min(100, frameNum - 30 * 9)),
           width: videoInfo.width,
           height: videoInfo.height
         }
@@ -132,7 +132,6 @@ async function processFrames(
         processedCount++;
 
         if (message.success) {
-          // Update progress every 1 second or every frame if there are few frames
           const now = Date.now();
           if (now - lastProgressUpdate >= 1000 || frameCount < 100) {
             const elapsed = (now - startTime) / 1000;
@@ -168,7 +167,6 @@ async function processFrames(
       });
     };
 
-    // Start workers
     for (let i = 0; i < maxWorkers && i < frameQueue.length; i++) {
       processNextFrame();
     }
@@ -184,7 +182,6 @@ async function reassembleVideo(
   return new Promise((resolve, reject) => {
     const command = ffmpeg();
 
-    // Add processed frames as input at original FPS
     command.input(path.join(tempDir, 'frame-%06d.png'))
       .inputFPS(videoInfo.fps);
 
@@ -231,7 +228,7 @@ export async function processVideoWithFilter(
 ): Promise<void> {
   const overallStartTime = Date.now();
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
-  console.log('║          Video to Turing Pattern Processing                   ║');
+  console.log('║          Video to Turing Pattern Processing                    ║');
   console.log('╚════════════════════════════════════════════════════════════════╝\n');
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-processing-'));

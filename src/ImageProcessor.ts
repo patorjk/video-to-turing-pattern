@@ -15,16 +15,14 @@ export interface LAB {
 export type SharpenMode = "rgb" | "lab";
 
 export class ImageProcessor {
-  // Pre-computed lookup tables for LAB conversion (significant speedup)
   private static sRGBtoLinearLUT: Float32Array | null = null;
   private static linearToSRGBLUT: Float32Array | null = null;
 
   private static initLookupTables() {
     if (this.sRGBtoLinearLUT !== null) return;
 
-    // Build lookup tables for gamma correction (256 entries)
     this.sRGBtoLinearLUT = new Float32Array(256);
-    this.linearToSRGBLUT = new Float32Array(4096); // Higher resolution for reverse
+    this.linearToSRGBLUT = new Float32Array(4096);
 
     for (let i = 0; i < 256; i++) {
       const val = i / 255;
@@ -44,7 +42,6 @@ export class ImageProcessor {
   private static rgbToLab(r: number, g: number, b: number): LAB {
     this.initLookupTables();
 
-    // Use lookup tables instead of computing pow every time
     const rNorm = this.sRGBtoLinearLUT![r];
     const gNorm = this.sRGBtoLinearLUT![g];
     const bNorm = this.sRGBtoLinearLUT![b];
@@ -79,7 +76,6 @@ export class ImageProcessor {
     let gLin = x * -0.9689 + y * 1.8758 + z * 0.0415;
     let bLin = x * 0.0557 + y * -0.204 + z * 1.057;
 
-    // Clamp before lookup
     rLin = Math.max(0, Math.min(1, rLin));
     gLin = Math.max(0, Math.min(1, gLin));
     bLin = Math.max(0, Math.min(1, bLin));
@@ -113,7 +109,6 @@ export class ImageProcessor {
       const rowStart = y * w * 4;
       let rSum = 0, gSum = 0, bSum = 0;
 
-      // Initialize sum with first radius+1 pixels
       for (let x = 0; x <= radius && x < w; x++) {
         const idx = rowStart + x * 4;
         rSum += input[idx];
@@ -121,7 +116,6 @@ export class ImageProcessor {
         bSum += input[idx + 2];
       }
 
-      // Process each pixel using sliding window
       for (let x = 0; x < w; x++) {
         const outIdx = rowStart + x * 4;
         output[outIdx] = rSum * divisor;
@@ -129,7 +123,6 @@ export class ImageProcessor {
         output[outIdx + 2] = bSum * divisor;
         output[outIdx + 3] = input[outIdx + 3];
 
-        // Slide window: remove leftmost, add rightmost
         const leftX = x - radius;
         const rightX = x + radius + 1;
 
@@ -167,7 +160,6 @@ export class ImageProcessor {
       const colStart = x * 4;
       let rSum = 0, gSum = 0, bSum = 0;
 
-      // Initialize sum with first radius+1 pixels
       for (let y = 0; y <= radius && y < h; y++) {
         const idx = y * w * 4 + colStart;
         rSum += input[idx];
@@ -175,7 +167,6 @@ export class ImageProcessor {
         bSum += input[idx + 2];
       }
 
-      // Process each pixel using sliding window
       for (let y = 0; y < h; y++) {
         const outIdx = y * w * 4 + colStart;
         output[outIdx] = rSum * divisor;
@@ -183,7 +174,6 @@ export class ImageProcessor {
         output[outIdx + 2] = bSum * divisor;
         output[outIdx + 3] = input[outIdx + 3];
 
-        // Slide window: remove topmost, add bottommost
         const topY = y - radius;
         const bottomY = y + radius + 1;
 
@@ -206,16 +196,11 @@ export class ImageProcessor {
 
   /**
    * Approximate Gaussian blur using multiple box blur passes
-   * This is MUCH faster for large radii (3-5x faster for radius > 6)
    */
   private static approximateGaussianBlur(imageData: ImageData, radius: number): ImageData {
     const w = imageData.width;
     const h = imageData.height;
     const data = imageData.data;
-
-    // Calculate ideal box blur radius
-    // For 3 passes, the relationship between Gaussian sigma and box radius is:
-    // boxRadius = sqrt((12 * sigma^2 / n) + 1) / 2 - 0.5
     const sigma = radius / 3;
     const n = 3; // number of passes
     const wIdeal = Math.sqrt((12 * sigma * sigma / n) + 1);
@@ -225,15 +210,12 @@ export class ImageProcessor {
     const temp1 = new Uint8ClampedArray(data.length);
     const temp2 = new Uint8ClampedArray(data.length);
 
-    // First pass: horizontal then vertical
     this.boxBlurHorizontal(data, temp1, w, h, boxRadius);
     this.boxBlurVertical(temp1, temp2, w, h, boxRadius);
 
-    // Second pass: horizontal then vertical
     this.boxBlurHorizontal(temp2, temp1, w, h, boxRadius);
     this.boxBlurVertical(temp1, temp2, w, h, boxRadius);
 
-    // Third pass: horizontal then vertical
     this.boxBlurHorizontal(temp2, temp1, w, h, boxRadius);
     this.boxBlurVertical(temp1, temp2, w, h, boxRadius);
 
@@ -241,18 +223,15 @@ export class ImageProcessor {
   }
 
   static gaussianBlur(imageData: ImageData, radius: number): ImageData {
-    // For large radii, use box blur approximation (much faster)
     if (radius > 6) {
       return this.approximateGaussianBlur(imageData, radius);
     }
 
-    // For small radii, use traditional Gaussian blur (more accurate)
     const w = imageData.width;
     const h = imageData.height;
     const data = imageData.data;
     const output = new Uint8ClampedArray(data.length);
 
-    // Pre-compute Gaussian kernel
     const kernel: number[] = [];
     let kernelSum = 0;
     const sigma = radius / 3;
@@ -265,15 +244,12 @@ export class ImageProcessor {
       kernelSum += value;
     }
 
-    // Normalize kernel
     for (let i = 0; i < kernel.length; i++) {
       kernel[i] /= kernelSum;
     }
 
-    // Temporary buffer for horizontal pass
     const temp = new Uint8ClampedArray(data.length);
 
-    // Horizontal pass
     for (let y = 0; y < h; y++) {
       const rowStart = y * w * 4;
       for (let x = 0; x < w; x++) {
@@ -296,7 +272,6 @@ export class ImageProcessor {
       }
     }
 
-    // Vertical pass
     for (let y = 0; y < h; y++) {
       const rowStart = y * w * 4;
       for (let x = 0; x < w; x++) {
@@ -332,14 +307,12 @@ export class ImageProcessor {
     const data = imageData.data;
     const output = new Uint8ClampedArray(data.length);
 
-    // Copy alpha channel and edges
     output.set(data);
 
     if (mode === "rgb") {
       const center = 1 + 4 * strength;
       const edge = -strength;
 
-      // Process inner pixels only (skip edges)
       for (let y = 1; y < h - 1; y++) {
         const rowStart = y * w * 4;
         const rowAbove = (y - 1) * w * 4;
@@ -352,7 +325,6 @@ export class ImageProcessor {
           const up = rowAbove + x * 4;
           const down = rowBelow + x * 4;
 
-          // Process RGB channels together for better cache usage
           for (let c = 0; c < 3; c++) {
             const value =
               data[idx + c] * center +
@@ -365,10 +337,8 @@ export class ImageProcessor {
         }
       }
     } else {
-      // LAB mode
       const labData = new Float32Array(w * h * 3);
 
-      // Convert RGB to LAB once
       for (let i = 0; i < w * h; i++) {
         const r = data[i * 4];
         const g = data[i * 4 + 1];
@@ -383,7 +353,6 @@ export class ImageProcessor {
       const edge = -strength;
       const labOutput = new Float32Array(labData.length);
 
-      // Copy edges
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           if (x === 0 || x === w - 1 || y === 0 || y === h - 1) {
@@ -395,7 +364,6 @@ export class ImageProcessor {
         }
       }
 
-      // Sharpen only L channel (luminance) for performance
       for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
           const idx = (y * w + x) * 3;
@@ -412,13 +380,11 @@ export class ImageProcessor {
             labData[right] * edge;
 
           labOutput[idx] = Math.max(0, Math.min(100, value));
-          // Copy a and b channels without sharpening
           labOutput[idx + 1] = labData[idx + 1];
           labOutput[idx + 2] = labData[idx + 2];
         }
       }
 
-      // Convert back to RGB
       for (let i = 0; i < w * h; i++) {
         const l = labOutput[i * 3];
         const a = labOutput[i * 3 + 1];

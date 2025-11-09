@@ -18,8 +18,6 @@ interface WorkerData {
 async function processFrame(): Promise<void> {
   try {
     const data: WorkerData = workerData;
-
-    // Load image
     const image = await loadImage(data.framePath);
     const canvas = createCanvas(image.width, image.height);
     const ctx = canvas.getContext('2d');
@@ -27,13 +25,8 @@ async function processFrame(): Promise<void> {
 
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Apply blur and sharpen iterations
-    // The key optimization here is that we reuse the imageData object
     for (let i = 0; i < data.numIterations; i++) {
-      // Blur
       imageData = ImageProcessor.gaussianBlur(imageData, data.blurRadius);
-
-      // Sharpen
       imageData = ImageProcessor.sharpenImage(
         imageData,
         data.sharpenStrength,
@@ -41,7 +34,6 @@ async function processFrame(): Promise<void> {
       );
     }
 
-    // Write result back
     ctx.putImageData(imageData, 0, 0);
     const buffer = canvas.toBuffer('image/png');
     fs.writeFileSync(data.framePath, buffer);
