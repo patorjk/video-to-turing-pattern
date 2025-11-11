@@ -1,6 +1,8 @@
 # Video to Turing Pattern
 
-This is a quick and dirty script I made to create turing pattern videos for my [YouTube video](https://www.youtube.com/watch?v=7oCtDGOSgG8) on the subject. Node is probably the wrong choice for a project like this, however, it's what I'm most comfortable working with and I knew I could make the script fairly quickly. If you opt to use this, just know that it's very, very slow.
+This is a quick and dirty script I made to create turing pattern videos for my [YouTube video](https://www.youtube.com/watch?v=7oCtDGOSgG8) on the subject. Node is the wrong choice for a project like this, however, it's what I'm most comfortable working with and I knew I could make the script fairly quickly. If you opt to use this, just know that it's very, very slow.
+
+This script was made for small videos (less than 15 seconds).
 
 ## Usage
 

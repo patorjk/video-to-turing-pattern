@@ -30,9 +30,18 @@ async function getVideoInfo(inputPath: string): Promise<VideoInfo> {
         ? eval(videoStream.r_frame_rate)
         : 30;
 
+      let width = videoStream.width || 0;
+      let height = videoStream.height || 0;
+
+      // Check for rotation metadata and swap dimensions if needed
+      const rotation = Math.abs(parseInt(videoStream.rotation as any) || 0);
+      if (rotation === 90 || rotation === 270) {
+        [width, height] = [height, width];
+      }
+
       resolve({
-        width: videoStream.width || 0,
-        height: videoStream.height || 0,
+        width: width,
+        height: height,
         fps: fps,
         duration: metadata.format.duration || 0
       });
@@ -42,14 +51,15 @@ async function getVideoInfo(inputPath: string): Promise<VideoInfo> {
 
 async function extractFrames(
   inputPath: string,
-  tempDir: string
+  tempDir: string,
+  fps: number = 30
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     let frameCount = 0;
 
     ffmpeg(inputPath)
       .outputOptions([
-        '-vf', 'fps=fps=30',
+        '-vf', `fps=fps=${fps}`,
       ])
       .output(path.join(tempDir, 'frame-%06d.png'))
       .on('progress', (progress) => {
@@ -179,12 +189,13 @@ async function reassembleVideo(
       '-preset', 'medium',
       '-crf', '18',
       '-c:a', 'copy',   // Copy audio without re-encoding
-      '-pix_fmt', 'yuv420p'
+      '-pix_fmt', 'yuv420p',
+      '-s', `${videoInfo.width}x${videoInfo.height}`
     ]);
 
     command.output(outputPath)
       .on('progress', (progress) => {
-        console.log(`Encoding: ${progress.percent?.toFixed(1)}% done`);
+        console.log(`Encoding: ${progress.percent?.toFixed(1) || 0}% done`);
       })
       .on('end', () => {
         console.log('Video reassembly complete');
@@ -213,7 +224,7 @@ export async function processVideoWithFilter(
     console.log(`Video: ${videoInfo.width}x${videoInfo.height} @ ${videoInfo.fps.toFixed(2)}fps`);
 
     console.log('Extracting frames...');
-    const frameCount = await extractFrames(inputPath, tempDir);
+    const frameCount = await extractFrames(inputPath, tempDir, videoInfo.fps);
 
     console.log('Processing frames in parallel...');
     await processFrames(
